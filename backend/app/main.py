@@ -1,8 +1,30 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-app= FastAPI()
+from app.db import get_db_session
+from app.rag.search import search
+
+app = FastAPI(title="Paper Pilot")
+
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
 
+
+@app.get("/api/search")
+async def search_endpoint(
+    q: str = Query(..., min_length=1, description="검색 쿼리"),
+    top_k: int = Query(5, ge=1, le=50),
+    session: AsyncSession = Depends(get_db_session),
+):
+    hits = await search(session, q, top_k=top_k)
+    return [
+        {
+            "paper_id": h.chunk.paper_id,
+            "section": h.chunk.section,
+            "distance": h.distance,
+            "content": h.chunk.content,
+        }
+        for h in hits
+    ]
